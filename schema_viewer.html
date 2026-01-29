@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cricbuzz DB Schema</title>
+    <!-- Load Mermaid from CDN -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</head>
+
+<body style="background-color: #f4f4f4; padding: 20px; font-family: sans-serif;">
+
+    <h1>Cricbuzz Database Schema</h1>
+    <p>Right-click the diagram below to save as image, or use print to save as PDF.</p>
+
+    <div class="mermaid"
+        style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        erDiagram
+        MASTER {
+        INTEGER match_id PK
+        TEXT team1
+        TEXT team2
+        TEXT winner
+        TEXT venue
+        TEXT match_name
+        }
+
+        PLAYERS {
+        INTEGER player_id PK
+        TEXT name
+        TEXT role
+        TEXT birth_date
+        TEXT birth_place
+        TEXT country
+        }
+
+        MATCH_PLAYERS {
+        INTEGER match_id FK
+        INTEGER player_id FK
+        TEXT team
+        INTEGER is_captain
+        INTEGER is_vice_captain
+        }
+
+        BATTING_SCORECARD {
+        INTEGER match_id FK
+        INTEGER player_id FK
+        INTEGER runs
+        INTEGER balls
+        INTEGER fours
+        INTEGER sixes
+        REAL strike_rate
+        }
+
+        BOWLING_SCORECARD {
+        INTEGER match_id FK
+        INTEGER player_id FK
+        REAL overs
+        INTEGER maidens
+        INTEGER runs
+        INTEGER wickets
+        INTEGER no_balls
+        INTEGER wides
+        REAL economy
+        }
+
+        MATCH_AWARDS {
+        INTEGER match_id FK
+        INTEGER player_id FK
+        TEXT award_name
+        }
+
+        MASTER ||--o{ MATCH_PLAYERS : contains
+        PLAYERS ||--o{ MATCH_PLAYERS : "plays in"
+        MASTER ||--o{ BATTING_SCORECARD : "batting stats"
+        PLAYERS ||--o{ BATTING_SCORECARD : "has stats"
+        MASTER ||--o{ BOWLING_SCORECARD : "bowling stats"
+        PLAYERS ||--o{ BOWLING_SCORECARD : "has stats"
+        MASTER ||--o{ MATCH_AWARDS : awards
+        PLAYERS ||--o{ MATCH_AWARDS : received
+    </div>
+
+</body>
+
+</html>

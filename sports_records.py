@@ -56,15 +56,31 @@ class SportsMatchScraper:
             "team1": "Unknown",
             "team2": "Unknown",
             "winner": None,
-            "venue": "Unknown"
+            "venue": "Unknown",
+            "match_name": "Unknown"
         }
         
         if not soup: return data
         
-        # 1. Extract Teams from Title or Header
-        # Title format usually: "Team A vs Team B, Match Description..."
+        # 1. Extract Teams and Match Name from Title or Header
+        # Title format: "India vs Sri Lanka, 3rd T20I - Live Cricket Score..."
+        # or header: "India vs Sri Lanka, 3rd T20I"
         title = soup.title.string if soup.title else ""
         data["team1"], data["team2"] = self.parse_teams(title)
+        
+        # Parse Match Name (e.g. 3rd T20I)
+        # Usually found in breadcrumb or subheader or title parts
+        # Try splitting title by comma
+        if "," in title:
+            parts = title.split(",")
+            if len(parts) > 1:
+                 # "Ind vs SL, 3rd T20I - Live..."
+                 sub = parts[1]
+                 if "-" in sub:
+                     data["match_name"] = sub.split("-")[0].strip()
+                 else:
+                     data["match_name"] = sub.strip()
+
         
         # 2. Venue
         # Look for venue link
@@ -168,9 +184,9 @@ class SportsMatchRecords:
     def _init_db(self):
         conn = sqlite3.connect(self.db_path)
         # Re-create table with new schema
-        conn.execute("DROP TABLE IF EXISTS sports_match_records_new") 
+        conn.execute("DROP TABLE IF EXISTS master_new") 
         # Check if we should migrate data? No, we are re-scraping specific IDs.
-        # But wait, other tables reference 'sports_match_records' (match_id).
+        # But wait, other tables reference 'master' (match_id).
         # Dropping the table might violate FK constraints if enforced, 
         # but SQLite default usually doesn't enforce unless enabled. 
         # Safest is to Drop and Recreate.
@@ -179,12 +195,13 @@ class SportsMatchRecords:
         # But here we are re-populating the specific user list.
         
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS sports_match_records (
-                match_id TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS master (
+                match_id INTEGER PRIMARY KEY,
                 team1 TEXT,
                 team2 TEXT,
                 winner TEXT,
-                venue TEXT
+                venue TEXT,
+                match_name TEXT
             )
         """)
         
@@ -192,18 +209,19 @@ class SportsMatchRecords:
         # If table exists from previous run, it might have 'teams' col.
         # Let's check schema.
         try:
-            cur = conn.execute("SELECT * FROM sports_match_records LIMIT 0")
+            cur = conn.execute("SELECT * FROM master LIMIT 0")
             cols = [description[0] for description in cur.description]
             if "teams" in cols and "team1" not in cols:
                 print("⚠️ Migrating schema: Dropping old table to recreate with new columns.")
-                conn.execute("DROP TABLE sports_match_records")
+                conn.execute("DROP TABLE master")
                 conn.execute("""
-                    CREATE TABLE sports_match_records (
-                        match_id TEXT PRIMARY KEY,
+                    CREATE TABLE master (
+                        match_id INTEGER PRIMARY KEY,
                         team1 TEXT,
                         team2 TEXT,
                         winner TEXT,
-                        venue TEXT
+                        venue TEXT,
+                        match_name TEXT
                     )
                 """)
         except Exception as e:
@@ -215,23 +233,39 @@ class SportsMatchRecords:
     def save_matches(self, matches: List[Dict]):
         conn = sqlite3.connect(self.db_path)
         # We use INSERT OR REPLACE to update existing entries
+        # Ensure match_name is passed
         conn.executemany("""
-            INSERT OR REPLACE INTO sports_match_records (match_id, team1, team2, winner, venue)
-            VALUES (:match_id, :team1, :team2, :winner, :venue)
+            UPDATE master 
+            SET team1=:team1, team2=:team2, winner=:winner, venue=:venue, match_name=:match_name
+            WHERE match_id=:match_id
         """, matches)
+        
+        # For new records or if update missed (though we initialized with migration)
+        # It's better to use INSERT OR REPLACE but we need to list all cols.
+        # Since we added a col via ALTER, existing rows have NULL.
+        # The UPDATE above handles it.
+        # But for full upsert:
+        conn.executemany("""
+            INSERT OR REPLACE INTO master (match_id, team1, team2, winner, venue, match_name)
+            VALUES (:match_id, :team1, :team2, :winner, :venue, :match_name)
+        """, matches)
+        
         conn.commit()
         conn.close()
 
     def display(self):
         conn = sqlite3.connect(self.db_path)
-        rows = conn.execute("SELECT * FROM sports_match_records").fetchall()
-        print("\n" + "="*100)
-        print(f"{'ID':<10} {'TEAM 1':<20} {'TEAM 2':<20} {'WINNER':<20} {'VENUE'}")
-        print("-" * 100)
+        rows = conn.execute("SELECT * FROM master").fetchall()
+        print("\n" + "="*120)
+        print(f"{'ID':<10} {'MATCH':<15} {'TEAM 1':<20} {'TEAM 2':<20} {'WINNER':<20} {'VENUE'}")
+        print("-" * 120)
         for r in rows:
-            # Row index depends on schema order: match_id, team1, team2, winner, venue
-            print(f"{r[0]:<10} {r[1]:<20} {r[2]:<20} {r[3]:<20} {r[4]}")
-        print("="*100)
+            # Columns: match_id, team1, team2, winner, venue, match_name (added at end)
+            # Careful with index if ALTER added it at the end
+            # r[0]=id, r[1]=t1, r[2]=t2, r[3]=win, r[4]=ven, r[5]=mname
+            mname = r[5] if len(r) > 5 else "N/A"
+            print(f"{r[0]:<10} {mname:<15} {r[1]:<20} {r[2]:<20} {r[3]:<20} {r[4]}")
+        print("="*120)
         conn.close()
 
 if __name__ == "__main__":

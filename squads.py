@@ -47,13 +47,16 @@ def init_db():
     """)
     
     # Create Match Squads Table
+    # Create Match Squads Table (V2: match_players)
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS match_squads (
-        squad_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        match_id TEXT NOT NULL,
-        player_id INTEGER NOT NULL,
+    CREATE TABLE IF NOT EXISTS match_players (
+        match_id INTEGER,
+        player_id INTEGER,
         team TEXT NOT NULL,
-        FOREIGN KEY (match_id) REFERENCES sports_match_records(match_id),
+        is_captain INTEGER DEFAULT 0,
+        is_vice_captain INTEGER DEFAULT 0,
+        PRIMARY KEY (match_id, player_id),
+        FOREIGN KEY (match_id) REFERENCES master(match_id),
         FOREIGN KEY (player_id) REFERENCES players(player_id)
     )
     """)
@@ -163,11 +166,11 @@ def scrape_squads():
                             ON CONFLICT(player_id) DO UPDATE SET role=excluded.role, name=excluded.name
                         """, (p_id, name, role))
                         
-                        # Insert Squad
+                        # Insert Squad (V2: match_players)
                         cursor.execute("""
-                            INSERT OR IGNORE INTO match_squads (match_id, player_id, team)
+                            INSERT OR IGNORE INTO match_players (match_id, player_id, team)
                             VALUES (?, ?, ?)
-                        """, (str(match_id), p_id, team_name))
+                        """, (int(match_id), p_id, team_name))
                         count += 1
                 return count
 

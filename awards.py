@@ -19,13 +19,16 @@ def init_db():
     
     # Create Match Awards Table without Foreign Keys for now
     # to avoid issues if the referenced match/player doesn't exist in our partial DB
+    # Create Match Awards Table (V2)
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS match_awards (
-        match_id TEXT,
-        player_id INTEGER,
-        player_name TEXT,
-        award_name TEXT DEFAULT 'Player of the Match'
-    )
+        CREATE TABLE IF NOT EXISTS match_awards (
+            match_id INTEGER,
+            player_id INTEGER,
+            award_name TEXT,
+            PRIMARY KEY (match_id, award_name, player_id),
+            FOREIGN KEY (match_id) REFERENCES master(match_id),
+            FOREIGN KEY (player_id) REFERENCES players(player_id)
+        )
     """)
     
     conn.commit()
@@ -104,15 +107,16 @@ def scrape_awards():
                     print(f"   ✅ Found: {p_name} ({p_id})")
                     
                     # Clean up existing entry for this match/award
+                    # Clean up existing entry for this match/award
                     cursor.execute("""
                         DELETE FROM match_awards 
                         WHERE match_id=? AND award_name='Player of the Match'
-                    """, (str(match_id),))
+                    """, (int(match_id),))
                     
                     cursor.execute("""
-                        INSERT INTO match_awards (match_id, player_id, player_name)
+                        INSERT OR IGNORE INTO match_awards (match_id, player_id, award_name)
                         VALUES (?, ?, ?)
-                    """, (str(match_id), p_id, p_name))
+                    """, (int(match_id), p_id, "Player of the Match"))
                     
                     conn.commit()
                 else:

@@ -15,37 +15,37 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Batter Scorecard Table
+    # Batter Scorecard Table (V2)
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS batter_scorecard (
-        match_id TEXT,
+    CREATE TABLE IF NOT EXISTS batting_scorecard (
+        match_id INTEGER,
         player_id INTEGER,
-        player_name TEXT,
-        R INTEGER,
-        B INTEGER,
+        runs INTEGER,
+        balls INTEGER,
         fours INTEGER,
         sixes INTEGER,
-        SR REAL,
-        FOREIGN KEY (match_id) REFERENCES sports_match_records(match_id)
+        strike_rate REAL,
+        PRIMARY KEY (match_id, player_id),
+        FOREIGN KEY (match_id) REFERENCES master(match_id),
+        FOREIGN KEY (player_id) REFERENCES players(player_id)
     )
     """)
     
-    # Bowler Scorecard Table
-    # Requested columns: O,M,R,W,NB,WB,ECO
-    # Using 'WB' for wides as requested
+    # Bowler Scorecard Table (V2)
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS bowler_scorecard (
-        match_id TEXT,
+    CREATE TABLE IF NOT EXISTS bowling_scorecard (
+        match_id INTEGER,
         player_id INTEGER,
-        player_name TEXT,
-        O REAL,
-        M INTEGER,
-        R INTEGER,
-        W INTEGER,
-        NB INTEGER,
-        WB INTEGER,
-        ECO REAL,
-        FOREIGN KEY (match_id) REFERENCES sports_match_records(match_id)
+        overs REAL,
+        maidens INTEGER,
+        runs INTEGER,
+        wickets INTEGER,
+        no_balls INTEGER,
+        wides INTEGER,
+        economy REAL,
+        PRIMARY KEY (match_id, player_id),
+        FOREIGN KEY (match_id) REFERENCES master(match_id),
+        FOREIGN KEY (player_id) REFERENCES players(player_id)
     )
     """)
     
@@ -89,9 +89,10 @@ def scrape_scorecards():
                 
             soup = BeautifulSoup(r.text, "html.parser")
             
-            # Clear existing data
-            cursor.execute("DELETE FROM batter_scorecard WHERE match_id=?", (str(match_id),))
-            cursor.execute("DELETE FROM bowler_scorecard WHERE match_id=?", (str(match_id),))
+            # Clear existing data for this match in new tables
+            cursor.execute("DELETE FROM batting_scorecard WHERE match_id=?", (int(match_id),))
+            cursor.execute("DELETE FROM bowling_scorecard WHERE match_id=?", (int(match_id),))
+
             
             # The new layout uses "grid" classes.
             # We search for rows directly.
@@ -140,9 +141,9 @@ def scrape_scorecards():
                 sr = clean_float(cols[5].get_text())
                 
                 cursor.execute("""
-                    INSERT INTO batter_scorecard (match_id, player_id, player_name, R, B, fours, sixes, SR)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (str(match_id), p_id, p_name, r_val, b_val, fours, sixes, sr))
+                    INSERT OR IGNORE INTO batting_scorecard (match_id, player_id, runs, balls, fours, sixes, strike_rate)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (int(match_id), p_id, r_val, b_val, fours, sixes, sr))
                 bat_count += 1
 
             # --- BOWLING ---
@@ -193,9 +194,9 @@ def scrape_scorecards():
                 eco_val = clean_float(cols[7].get_text())
                 
                 cursor.execute("""
-                    INSERT INTO bowler_scorecard (match_id, player_id, player_name, O, M, R, W, NB, WB, ECO)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (str(match_id), p_id, p_name, o_val, m_val, r_val, w_val, nb_val, wd_val, eco_val))
+                    INSERT OR IGNORE INTO bowling_scorecard (match_id, player_id, overs, maidens, runs, wickets, no_balls, wides, economy)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (int(match_id), p_id, o_val, m_val, r_val, w_val, nb_val, wd_val, eco_val))
                 bowl_count += 1
             
             conn.commit()
